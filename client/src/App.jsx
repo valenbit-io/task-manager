@@ -20,35 +20,29 @@ function App() {
   const [tareas, setTareas] = useState([]);
   const [recargar, setRecargar] = useState(false);
   
-  // FORMULARIO CREAR
-  const [nuevoTitulo, setNuevoTitulo] = useState("");
-  const [nuevaFecha, setNuevaFecha] = useState(""); 
-  const [nuevaPrioridad, setNuevaPrioridad] = useState("Media");
-  const [nuevaCategoria, setNuevaCategoria] = useState("General");
-  
   // ERRORES Y FILTROS
   const [mensajeError, setMensajeError] = useState(""); 
   const [busqueda, setBusqueda] = useState(""); 
   const [filtroPrioridad, setFiltroPrioridad] = useState("Todas");
   const [filtroCategoria, setFiltroCategoria] = useState("Todas");
 
-  // ESTADOS NUEVOS PARA UI MEJORADA
+  // ESTADOS UI MEJORADA
   const [seleccionadas, setSeleccionadas] = useState([]);
   const [modoSeleccion, setModoSeleccion] = useState(false); 
   const [menuAbiertoId, setMenuAbiertoId] = useState(null); 
-  
-  // NUEVO: Estado para el menú de borrado masivo
   const [menuBorradoAbierto, setMenuBorradoAbierto] = useState(false);
 
-  // MODAL
+  // MODAL (Maneja Crear, Editar y Borrar)
   const [modal, setModal] = useState({
     abierto: false,
-    tipo: null, 
+    tipo: null, // 'crear', 'editar', 'borrar-uno', 'borrar-seleccion', 'borrar-auto'
     idTarea: null,
     textoInput: "",
     fechaInput: "",
     prioridadInput: "Media",
-    categoriaInput: "General"
+    categoriaInput: "General",
+    mensajeConfirmacion: "",
+    datosExtra: null
   });
 
   useEffect(() => {
@@ -63,13 +57,11 @@ function App() {
 
   const toggleModoOscuro = () => setModoOscuro(!modoOscuro);
 
-  // Cierra los menús si haces clic fuera
   useEffect(() => {
       const handleClickFuera = () => {
           setMenuAbiertoId(null);
           setMenuBorradoAbierto(false);
       };
-      // Agregamos un pequeño delay para que no se cierre inmediatamente al abrirlo
       if (menuAbiertoId || menuBorradoAbierto) {
           document.addEventListener('click', handleClickFuera);
       }
@@ -131,7 +123,7 @@ function App() {
   const porcentaje = totalTareas === 0 ? 0 : Math.round((tareasCompletadas / totalTareas) * 100);
 
   const obtenerMensajeProgreso = () => {
-      if (totalTareas === 0) return "Agrega tu primera tarea 📝";
+      if (totalTareas === 0) return "¡Lista vacía! Relájate 🍃";
       if (porcentaje === 100) return "¡Todo listo! Eres una máquina 🏆";
       if (porcentaje >= 50) return "¡Ya pasaste la mitad! 🚀";
       return "Vamos a empezar 💪";
@@ -146,127 +138,78 @@ function App() {
 
   const filtrosActivos = busqueda !== "" || filtroPrioridad !== "Todas" || filtroCategoria !== "Todas";
 
-  const apiEliminar = async (id) => {
-    await fetch(`${API_URL}/tareas/${id}`, { method: 'DELETE' });
-    setRecargar(!recargar);
-  };
+  const activarModoSeleccion = () => { setModoSeleccion(true); setSeleccionadas([]); };
+  const cancelarModoSeleccion = () => { setModoSeleccion(false); setSeleccionadas([]); };
 
-  // --- LÓGICA DE BORRADO ---
-  const activarModoSeleccion = () => {
-      setModoSeleccion(true);
-      setSeleccionadas([]);
-  };
-
-  const cancelarModoSeleccion = () => {
-      setModoSeleccion(false);
-      setSeleccionadas([]);
-  };
-
-  // Borrado Manual (Selección)
-  const eliminarMultiples = async () => {
+  const solicitarBorradoSeleccion = () => {
       if(!seleccionadas.length) return;
-      if(!confirm(`¿Eliminar ${seleccionadas.length} tareas permanentemente?`)) return;
-
-      await Promise.all(seleccionadas.map(id => 
-          fetch(`${API_URL}/tareas/${id}`, { method: 'DELETE' })
-      ));
-      
-      cancelarModoSeleccion();
-      setRecargar(!recargar);
+      setModal({ ...modal, abierto: true, tipo: 'borrar-seleccion', mensajeConfirmacion: `¿Eliminar ${seleccionadas.length} tareas?` });
   };
 
-  // NUEVO: Borrado Automático (Categorías)
-  const ejecutarBorradoRapido = async (tipo) => {
+  const solicitarBorradoRapido = (tipo) => {
       let tareasABorrar = [];
       let mensaje = "";
-
-      if (tipo === 'completadas') {
-          tareasABorrar = tareas.filter(t => t.completada);
-          mensaje = `¿Borrar las ${tareasABorrar.length} tareas completadas?`;
-      } else if (tipo === 'vencidas') {
-          tareasABorrar = tareas.filter(t => esVencida(t.fechaLimite) && !t.completada);
-          mensaje = `¿Borrar las ${tareasABorrar.length} tareas vencidas?`;
-      } else if (tipo === 'todas') {
-          tareasABorrar = tareas;
-          mensaje = `⚠️ ¡CUIDADO! ¿Estás seguro de que quieres borrar TODAS (${tareas.length}) las tareas?`;
-      }
+      if (tipo === 'completadas') { tareasABorrar = tareas.filter(t => t.completada); mensaje = `¿Eliminar completadas (${tareasABorrar.length})?`; } 
+      else if (tipo === 'vencidas') { tareasABorrar = tareas.filter(t => esVencida(t.fechaLimite) && !t.completada); mensaje = `¿Eliminar vencidas (${tareasABorrar.length})?`; } 
+      else if (tipo === 'todas') { tareasABorrar = tareas; mensaje = `⚠️ ¿Eliminar TODAS las tareas?`; }
 
       if (tareasABorrar.length === 0) {
-          alert("No hay tareas de este tipo para borrar.");
+          setMensajeError(`No hay tareas ${tipo} para borrar.`);
+          setTimeout(() => setMensajeError(""), 3000);
           setMenuBorradoAbierto(false);
           return;
       }
-
-      if (!confirm(mensaje)) return;
-
-      // Ejecutar borrado
-      await Promise.all(tareasABorrar.map(t => fetch(`${API_URL}/tareas/${t._id}`, { method: 'DELETE' })));
-      setRecargar(!recargar);
+      setModal({ ...modal, abierto: true, tipo: 'borrar-auto', mensajeConfirmacion: mensaje, datosExtra: tareasABorrar });
       setMenuBorradoAbierto(false);
   };
 
   const toggleSeleccion = (id) => {
-      if(seleccionadas.includes(id)) {
-          setSeleccionadas(seleccionadas.filter(item => item !== id));
-      } else {
-          setSeleccionadas([...seleccionadas, id]);
-      }
+      if(seleccionadas.includes(id)) setSeleccionadas(seleccionadas.filter(item => item !== id));
+      else setSeleccionadas([...seleccionadas, id]);
   };
 
-  const toggleMenuBorrado = (e) => {
-      e.stopPropagation();
-      setMenuBorradoAbierto(!menuBorradoAbierto);
-  };
+  const toggleMenuBorrado = (e) => { e.stopPropagation(); setMenuBorradoAbierto(!menuBorradoAbierto); };
 
   const apiEditar = async (id, nuevoTexto, nuevaFechaEditada, nuevaPrioridadEditada, nuevaCategoriaEditada) => {
     const fechaConHora = nuevaFechaEditada ? nuevaFechaEditada + "T12:00:00" : "";
     await fetch(`${API_URL}/tareas/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-          titulo: nuevoTexto, 
-          fechaLimite: fechaConHora, 
-          prioridad: nuevaPrioridadEditada,
-          categoria: nuevaCategoriaEditada
-      })
+      body: JSON.stringify({ titulo: nuevoTexto, fechaLimite: fechaConHora, prioridad: nuevaPrioridadEditada, categoria: nuevaCategoriaEditada })
     });
     setRecargar(!recargar);
   };
 
-  const agregarTarea = async (e) => {
-    e.preventDefault();
-    setMensajeError("");
-    if (!nuevoTitulo.trim()) return;
+  // ESTA FUNCIÓN SE LLAMA DESDE EL MODAL PARA CREAR
+  const agregarTareaDesdeModal = async () => {
+    if (!modal.textoInput.trim()) return;
     
     const existeDuplicada = tareas.some((t) => {
-        const tituloIgual = t.titulo.trim().toLowerCase() === nuevoTitulo.trim().toLowerCase();
-        return tituloIgual && t.prioridad === nuevaPrioridad && t.categoria === nuevaCategoria;
+        const tituloIgual = t.titulo.trim().toLowerCase() === modal.textoInput.trim().toLowerCase();
+        return tituloIgual && t.prioridad === modal.prioridadInput && t.categoria === modal.categoriaInput;
     });
 
     if (existeDuplicada) {
-        setMensajeError("⚠️ Ya existe una tarea similar.");
+        alert("⚠️ Ya existe una tarea similar.");
         return;
     }
 
     const userId = obtenerIdUsuario();
-    const fechaConHora = nuevaFecha ? nuevaFecha + "T12:00:00" : "";
+    const fechaConHora = modal.fechaInput ? modal.fechaInput + "T12:00:00" : "";
 
     await fetch(`${API_URL}/tareas`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-          titulo: nuevoTitulo, 
+          titulo: modal.textoInput, 
           usuarioId: userId, 
           fechaLimite: fechaConHora, 
-          prioridad: nuevaPrioridad,
-          categoria: nuevaCategoria
+          prioridad: modal.prioridadInput, 
+          categoria: modal.categoriaInput 
       })
     });
-    setNuevoTitulo("");
-    setNuevaFecha(""); 
-    setNuevaPrioridad("Media");
-    setNuevaCategoria("General");
     setRecargar(!recargar);
+    cerrarModal();
   };
 
   const toggleCompletada = async (id, estadoActual) => {
@@ -279,8 +222,21 @@ function App() {
     setRecargar(!recargar);
   };
 
-  const confirmarBorrado = (id) => setModal({ abierto: true, tipo: 'borrar', idTarea: id, textoInput: "", fechaInput: "", prioridadInput: "", categoriaInput: "" });
+  const confirmarBorradoUno = (id) => setModal({ ...modal, abierto: true, tipo: 'borrar-uno', idTarea: id });
   
+  // ABRIR MODAL PARA CREAR
+  const abrirModalCrear = () => {
+      setModal({
+          abierto: true,
+          tipo: 'crear',
+          idTarea: null,
+          textoInput: "",
+          fechaInput: "",
+          prioridadInput: "Media",
+          categoriaInput: "General"
+      });
+  };
+
   const iniciarEdicion = (id, textoActual, fechaActual, prioridadActual, categoriaActual) => {
     let fechaFormateada = "";
     if (fechaActual) fechaFormateada = new Date(fechaActual).toISOString().split('T')[0];
@@ -296,12 +252,28 @@ function App() {
   };
   
   const cerrarModal = () => setModal({ ...modal, abierto: false });
-  const ejecutarAccionModal = () => {
-    if (modal.tipo === 'borrar') apiEliminar(modal.idTarea);
-    else if (modal.tipo === 'editar' && modal.textoInput.trim() !== "") {
-        apiEditar(modal.idTarea, modal.textoInput, modal.fechaInput, modal.prioridadInput, modal.categoriaInput);
+  
+  const ejecutarAccionModal = async () => {
+    if (modal.tipo === 'crear') {
+        await agregarTareaDesdeModal();
+    } else if (modal.tipo === 'borrar-uno') {
+        await fetch(`${API_URL}/tareas/${modal.idTarea}`, { method: 'DELETE' });
+        setRecargar(!recargar);
+        cerrarModal();
+    } else if (modal.tipo === 'editar' && modal.textoInput.trim() !== "") {
+        await apiEditar(modal.idTarea, modal.textoInput, modal.fechaInput, modal.prioridadInput, modal.categoriaInput);
+        cerrarModal();
+    } else if (modal.tipo === 'borrar-seleccion') {
+        await Promise.all(seleccionadas.map(id => fetch(`${API_URL}/tareas/${id}`, { method: 'DELETE' })));
+        setRecargar(!recargar);
+        cancelarModoSeleccion();
+        cerrarModal();
+    } else if (modal.tipo === 'borrar-auto') {
+        const tareasParaBorrar = modal.datosExtra || [];
+        await Promise.all(tareasParaBorrar.map(t => fetch(`${API_URL}/tareas/${t._id}`, { method: 'DELETE' })));
+        setRecargar(!recargar);
+        cerrarModal();
     }
-    cerrarModal();
   };
 
   const manejarSalir = () => { if (modoInvitado) setModoInvitado(false); else logout(); };
@@ -322,142 +294,113 @@ function App() {
       }
   };
 
-  const toggleMenu = (e, id) => {
-      e.stopPropagation(); 
-      if (menuAbiertoId === id) setMenuAbiertoId(null);
-      else setMenuAbiertoId(id);
-  };
+  const toggleMenu = (e, id) => { e.stopPropagation(); if (menuAbiertoId === id) setMenuAbiertoId(null); else setMenuAbiertoId(id); };
 
   if (cargandoUsuario) return <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-800 dark:text-white">Cargando...</div>;
   if (!usuario && !modoInvitado) return <Login activarInvitado={() => setModoInvitado(true)} />;
 
   return (
-    <div className="min-h-screen transition-colors duration-300 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+    <div className="min-h-screen transition-colors duration-300 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex flex-col items-center p-4 relative">
+      
+      {/* --- MODAL UNIFICADO (AHORA INCLUYE 'CREAR') --- */}
       {modal.abierto && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 transition-opacity p-4">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-100 dark:border-gray-700">
-                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4 border-b border-gray-100 dark:border-gray-700 pb-2">{modal.tipo === 'borrar' ? 'Eliminar Tarea' : 'Editar Tarea'}</h3>
-                {modal.tipo === 'borrar' ? (
-                    <p className="text-gray-600 dark:text-gray-300 mb-6">¿Estás seguro de que deseas eliminar esta tarea?</p>
+        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex justify-center items-center z-[100] transition-opacity p-4">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200">
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4 border-b border-gray-100 dark:border-gray-700 pb-2">
+                    {modal.tipo === 'crear' ? 'Nueva Tarea' : modal.tipo === 'editar' ? 'Editar Tarea' : 'Confirmar'}
+                </h3>
+                
+                {modal.tipo.startsWith('borrar') ? (
+                    <div className="mb-6">
+                        <div className="flex justify-center mb-4 text-4xl">🗑️</div>
+                        <p className="text-center text-gray-600 dark:text-gray-300 font-medium">{modal.mensajeConfirmacion || "¿Estás seguro?"}</p>
+                    </div>
                 ) : (
+                    // FORMULARIO DENTRO DEL MODAL (PARA CREAR Y EDITAR)
                     <div className="flex flex-col gap-4 mb-6">
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Título</label><input autoFocus type="text" value={modal.textoInput} onChange={(e) => setModal({...modal, textoInput: e.target.value})} className="w-full border dark:border-gray-600 p-2 rounded focus:ring-2 focus:ring-indigo-200 dark:bg-gray-700 dark:text-white focus:outline-none" /></div>
+                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Título</label><input autoFocus type="text" value={modal.textoInput} onChange={(e) => setModal({...modal, textoInput: e.target.value})} className="w-full border dark:border-gray-600 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white focus:outline-none text-lg font-medium" placeholder="Ej: Ir al gimnasio" /></div>
                         
-                        <div className="flex gap-2">
+                        <div className="flex gap-3">
                              <div className="w-1/2"><label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Categoría</label>
-                                <select value={modal.categoriaInput} onChange={(e) => setModal({...modal, categoriaInput: e.target.value})} className="w-full border dark:border-gray-600 p-2 rounded text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-200 focus:outline-none">
+                                <select value={modal.categoriaInput} onChange={(e) => setModal({...modal, categoriaInput: e.target.value})} className="w-full border dark:border-gray-600 p-2 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none h-10">
                                     <option value="General">⚙️ General</option><option value="Trabajo">💼 Trabajo</option><option value="Personal">👤 Personal</option><option value="Estudio">📚 Estudio</option><option value="Hogar">🏠 Hogar</option>
                                 </select>
                             </div>
                             <div className="w-1/2"><label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Prioridad</label>
-                                <select value={modal.prioridadInput} onChange={(e) => setModal({...modal, prioridadInput: e.target.value})} className="w-full border dark:border-gray-600 p-2 rounded text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-200 focus:outline-none">
+                                <select value={modal.prioridadInput} onChange={(e) => setModal({...modal, prioridadInput: e.target.value})} className="w-full border dark:border-gray-600 p-2 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none h-10">
                                     <option value="Alta">🔥 Alta</option><option value="Media">⚡ Media</option><option value="Baja">☕ Baja</option>
                                 </select>
                             </div>
                         </div>
-                         <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Fecha</label><input type="date" value={modal.fechaInput} onChange={(e) => setModal({...modal, fechaInput: e.target.value})} className="w-full border dark:border-gray-600 p-2 rounded text-sm focus:ring-2 focus:ring-indigo-200 dark:bg-gray-700 dark:text-white focus:outline-none" /></div>
+                         <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Fecha Límite</label><input type="date" value={modal.fechaInput} onChange={(e) => setModal({...modal, fechaInput: e.target.value})} className="w-full border dark:border-gray-600 p-2 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white focus:outline-none" /></div>
                     </div>
                 )}
-                <div className="flex gap-3 justify-end"><button onClick={cerrarModal} className="px-4 py-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium">Cancelar</button><button onClick={ejecutarAccionModal} className={`px-4 py-2 text-white rounded-lg font-bold shadow-md ${modal.tipo === 'borrar' ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}>{modal.tipo === 'borrar' ? 'Eliminar' : 'Guardar'}</button></div>
+                
+                <div className="flex gap-3 justify-end">
+                    <button onClick={cerrarModal} className="px-4 py-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm">Cancelar</button>
+                    <button onClick={ejecutarAccionModal} className={`px-4 py-2 text-white rounded-lg font-bold shadow-md text-sm ${modal.tipo.startsWith('borrar') ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                        {modal.tipo.startsWith('borrar') ? 'Sí, eliminar' : modal.tipo === 'crear' ? 'Crear Tarea' : 'Guardar'}
+                    </button>
+                </div>
             </div>
         </div>
       )}
 
-      <div className="bg-white dark:bg-gray-800 p-4 sm:p-8 rounded-xl shadow-2xl w-full max-w-lg relative transition-colors duration-300 min-h-[500px]">
-        <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-3">{usuario?.photoURL ? <img src={usuario.photoURL} alt="Avatar" className="w-10 h-10 rounded-full border-2 border-blue-500" /> : <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-lg">Inv</div>}<div><h2 className="text-sm font-bold text-gray-800 dark:text-white">{usuario ? usuario.displayName : "Invitado"}</h2></div></div>
-            <div className="flex items-center gap-3"><button onClick={toggleModoOscuro} className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-yellow-400 hover:scale-110">{modoOscuro ? "☀️" : "🌙"}</button><button onClick={manejarSalir} className="text-xs text-red-500 hover:underline font-semibold">Salir</button></div>
+      {/* --- CABECERA SUPERIOR --- */}
+      <div className="w-full max-w-lg flex justify-between items-center mb-6 pt-2">
+            <div className="flex items-center gap-3">{usuario?.photoURL ? <img src={usuario.photoURL} alt="Avatar" className="w-10 h-10 rounded-full border-2 border-indigo-500 shadow-sm" /> : <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-lg shadow-sm">Inv</div>}
+            <div><p className="text-xs text-gray-500 dark:text-gray-400 font-bold">Hola,</p><h2 className="text-sm font-bold text-gray-800 dark:text-white">{usuario ? usuario.displayName : "Invitado"}</h2></div></div>
+            <div className="flex items-center gap-2"><button onClick={toggleModoOscuro} className="p-2 rounded-full bg-white dark:bg-gray-700 text-gray-600 dark:text-yellow-400 shadow-sm hover:scale-105 transition">{modoOscuro ? "☀️" : "🌙"}</button><button onClick={manejarSalir} className="px-3 py-1 text-xs text-red-500 font-bold hover:bg-red-50 rounded-lg transition">Salir</button></div>
+      </div>
+
+      <div className="w-full max-w-lg relative transition-colors duration-300 pb-24">
+        
+        {/* PROGRESO */}
+        <div className="mb-6 bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+            <div className="flex justify-between items-end mb-2"><span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{obtenerMensajeProgreso()}</span><span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{tareasCompletadas}/{totalTareas}</span></div>
+            <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2 overflow-hidden"><div className="bg-indigo-600 dark:bg-indigo-500 h-2 rounded-full transition-all duration-700 ease-out" style={{ width: `${porcentaje}%` }}></div></div>
         </div>
 
-        <h1 className="text-3xl font-extrabold mb-2 text-center text-gray-800 dark:text-white tracking-tight">Mis Objetivos 🚀</h1>
-
-        <div className="mb-6"><div className="flex justify-between items-end mb-1"><span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{obtenerMensajeProgreso()}</span><span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{tareasCompletadas} de {totalTareas}</span></div><div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden"><div className="bg-indigo-600 dark:bg-indigo-500 h-2.5 rounded-full transition-all duration-700 ease-out" style={{ width: `${porcentaje}%` }}></div></div></div>
-
-        {/* --- BARRA DE BÚSQUEDA Y FILTROS --- */}
-        <div className="mb-6 flex flex-col gap-2">
-            <div className="flex flex-col sm:flex-row gap-2">
-                <input type="text" placeholder="🔍 Buscar tarea..." className="w-full bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 dark:text-white transition placeholder-gray-400 dark:placeholder-gray-500" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-                <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
-                    <select className="bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-xs focus:ring-2 focus:ring-indigo-200 transition text-gray-600 dark:text-gray-200 font-semibold cursor-pointer w-full" value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)}>
-                        <option value="Todas">Todas</option>
-                        <option value="General">⚙️ General</option>
-                        <option value="Trabajo">💼 Trabajo</option>
-                        <option value="Personal">👤 Personal</option>
-                        <option value="Estudio">📚 Estudio</option>
-                        <option value="Hogar">🏠 Hogar</option>
-                    </select>
-                    <select className="bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-xs focus:ring-2 focus:ring-indigo-200 transition text-gray-600 dark:text-gray-200 font-semibold cursor-pointer w-full" value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)}>
-                        <option value="Todas">Prioridad</option>
-                        <option value="Alta">🔥 Alta</option>
-                        <option value="Media">⚡ Media</option>
-                        <option value="Baja">☕ Baja</option>
-                    </select>
-                </div>
+        {/* BÚSQUEDA Y FILTROS (Más compactos) */}
+        <div className="mb-4 flex flex-col gap-2">
+            <input type="text" placeholder="🔍 Buscar..." className="w-full bg-white dark:bg-gray-800 border-none p-3 rounded-xl shadow-sm text-sm focus:ring-2 focus:ring-indigo-200 dark:text-white transition placeholder-gray-400 dark:placeholder-gray-500" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+            <div className="flex gap-2 w-full overflow-x-auto pb-1 no-scrollbar">
+                <select className="bg-white dark:bg-gray-800 border-none px-3 py-2 rounded-lg shadow-sm text-xs font-bold text-gray-600 dark:text-gray-300 cursor-pointer min-w-[100px]" value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)}>
+                    <option value="Todas">📂 Todas</option><option value="General">⚙️ General</option><option value="Trabajo">💼 Trabajo</option><option value="Personal">👤 Personal</option><option value="Estudio">📚 Estudio</option><option value="Hogar">🏠 Hogar</option>
+                </select>
+                <select className="bg-white dark:bg-gray-800 border-none px-3 py-2 rounded-lg shadow-sm text-xs font-bold text-gray-600 dark:text-gray-300 cursor-pointer min-w-[100px]" value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)}>
+                    <option value="Todas">📊 Prioridad</option><option value="Alta">🔥 Alta</option><option value="Media">⚡ Media</option><option value="Baja">☕ Baja</option>
+                </select>
             </div>
         </div>
 
-        <form onSubmit={agregarTarea} className="flex flex-col gap-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-inner">
-          <div className="w-full">
-            <input type="text" className="bg-transparent w-full focus:outline-none text-gray-700 dark:text-white font-semibold text-lg placeholder-gray-400 dark:placeholder-gray-500" placeholder="¿Qué quieres lograr hoy?" value={nuevoTitulo} onChange={(e) => { setNuevoTitulo(e.target.value); setMensajeError(""); }} />
-          </div>
-
-          <div className="w-full h-px bg-gray-200 dark:bg-gray-600"></div>
-
-          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full">
-            <div className="flex items-center flex-1 min-w-[140px] gap-1">
-                <select value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} className="bg-transparent text-xs font-bold text-gray-600 dark:text-gray-300 focus:outline-none cursor-pointer hover:text-indigo-600 h-10 flex-1" title="Categoría"><option value="General">⚙️ General</option><option value="Trabajo">💼 Trabajo</option><option value="Personal">👤 Personal</option><option value="Estudio">📚 Estudio</option><option value="Hogar">🏠 Hogar</option></select>
-                <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
-                <select value={nuevaPrioridad} onChange={(e) => setNuevaPrioridad(e.target.value)} className="bg-transparent text-xs font-bold text-gray-600 dark:text-gray-300 focus:outline-none cursor-pointer hover:text-indigo-600 h-10 flex-1" title="Prioridad"><option value="Alta">🔥 Alta</option><option value="Media">⚡ Media</option><option value="Baja">☕ Baja</option></select>
-            </div>
-            <div className="relative flex items-center bg-white dark:bg-gray-600 hover:bg-indigo-50 dark:hover:bg-gray-500 border border-gray-200 dark:border-gray-500 rounded-lg px-2 transition-colors cursor-pointer group shadow-sm h-10 w-full sm:w-auto mt-2 sm:mt-0">
-                <span className="text-lg mr-1 group-hover:scale-110 transition-transform">📅</span>
-                <input type="date" className={`bg-transparent text-xs focus:outline-none cursor-pointer font-medium w-full sm:w-auto ${nuevaFecha ? 'text-gray-700 dark:text-white' : 'text-gray-400 dark:text-gray-400'}`} value={nuevaFecha} onChange={(e) => setNuevaFecha(e.target.value)} />
-            </div>
-          </div>
-
-          <button type="submit" className="w-full bg-indigo-600 dark:bg-indigo-500 text-white py-2 rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-400 transition shadow-lg shadow-indigo-200 dark:shadow-none font-bold text-sm">
-            Agregar Tarea +
-          </button>
-        </form>
-
-        {/* --- BARRA DE BORRADO MASIVO --- */}
+        {/* BARRA DE HERRAMIENTAS (Seleccionar / Borrar) */}
         {tareas.length > 0 && !mensajeError && (
-             <div className="mb-4 mt-2">
+             <div className="mb-4 flex justify-end animate-in fade-in duration-300">
                 {!modoSeleccion ? (
-                    <div className="flex gap-1">
-                        <button onClick={activarModoSeleccion} className="flex-1 bg-gray-400 dark:bg-gray-600 text-white py-2 rounded-l-lg hover:bg-gray-500 dark:hover:bg-gray-500 transition shadow-sm font-bold text-sm flex items-center justify-center gap-2">
-                           <span>🗑</span> Seleccionar para borrar
+                    <div className="flex gap-px shadow-sm rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                        <button onClick={activarModoSeleccion} className="text-gray-600 dark:text-gray-300 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition font-bold text-xs flex items-center gap-1">
+                           <span>✨</span> Seleccionar
                         </button>
-                        <div className="relative">
-                            <button onClick={toggleMenuBorrado} className="h-full bg-gray-400 dark:bg-gray-600 text-white px-3 rounded-r-lg hover:bg-gray-500 dark:hover:bg-gray-500 transition shadow-sm font-bold border-l border-gray-300 dark:border-gray-500">
-                                ▼
-                            </button>
-                            {/* MENU DESPLEGABLE DE BORRADO */}
+                        <div className="relative border-l border-gray-200 dark:border-gray-700">
+                            <button onClick={toggleMenuBorrado} className="h-full px-2 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-500 transition font-bold text-xs">▼</button>
                             {menuBorradoAbierto && (
                                 <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 shadow-xl rounded-lg border border-gray-100 dark:border-gray-600 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right">
-                                    <button onClick={() => ejecutarBorradoRapido('completadas')} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
-                                        🧹 Borrar Completadas
-                                    </button>
+                                    <button onClick={() => solicitarBorradoRapido('completadas')} className="w-full text-left px-4 py-3 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">🧹 Borrar Completadas</button>
                                     <div className="h-px bg-gray-100 dark:bg-gray-700"></div>
-                                    <button onClick={() => ejecutarBorradoRapido('vencidas')} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
-                                        ⏰ Borrar Vencidas
-                                    </button>
+                                    <button onClick={() => solicitarBorradoRapido('vencidas')} className="w-full text-left px-4 py-3 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">⏰ Borrar Vencidas</button>
                                     <div className="h-px bg-gray-100 dark:bg-gray-700"></div>
-                                    <button onClick={() => ejecutarBorradoRapido('todas')} className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
-                                        💥 Borrar TODAS
-                                    </button>
+                                    <button onClick={() => solicitarBorradoRapido('todas')} className="w-full text-left px-4 py-3 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">💥 Borrar TODAS</button>
                                 </div>
                             )}
                         </div>
                     </div>
                 ) : (
-                    <div className="flex gap-2 items-center w-full bg-red-50 dark:bg-red-900/20 p-2 rounded-lg border border-red-100 dark:border-red-800 animate-in slide-in-from-top-2">
-                        <span className="text-xs font-bold text-red-600 dark:text-red-300 flex-1">Selecciona para borrar...</span>
-                        <button onClick={cancelarModoSeleccion} className="text-xs text-gray-500 px-3 py-1 bg-white dark:bg-gray-700 rounded border hover:bg-gray-50">Cancelar</button>
+                    <div className="flex gap-2 items-center bg-indigo-50 dark:bg-indigo-900/20 p-1.5 rounded-lg border border-indigo-100 dark:border-indigo-800 animate-in slide-in-from-right-4 shadow-sm">
+                        <span className="text-xs font-bold text-indigo-600 dark:text-indigo-300 ml-2">{seleccionadas.length} seleccionadas</span>
+                        <button onClick={cancelarModoSeleccion} className="text-xs text-gray-500 px-2 py-1 bg-white dark:bg-gray-700 rounded border hover:bg-gray-50">Cancelar</button>
                         {seleccionadas.length > 0 && (
-                            <button onClick={eliminarMultiples} className="text-xs text-white px-3 py-1 bg-red-500 rounded font-bold shadow-sm hover:bg-red-600">
-                                Borrar ({seleccionadas.length})
-                            </button>
+                            <button onClick={solicitarBorradoSeleccion} className="text-xs text-white px-2 py-1 bg-red-500 rounded font-bold shadow-sm hover:bg-red-600">Borrar</button>
                         )}
                     </div>
                 )}
@@ -466,25 +409,25 @@ function App() {
 
         {mensajeError && <div className="mb-6 text-center text-red-500 text-xs font-bold bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800 animate-pulse">{mensajeError}</div>}
 
-        {tareas.length === 0 && !mensajeError && <div className="text-center py-12 opacity-70"><p className="text-5xl mb-4 animate-bounce">🍃</p><p className="text-gray-500 dark:text-gray-400 text-lg font-medium">Todo limpio</p></div>}
+        {tareas.length === 0 && !mensajeError && <div className="text-center py-20 opacity-70"><p className="text-6xl mb-4 animate-bounce">🍃</p><p className="text-gray-500 dark:text-gray-400 text-lg font-medium">Todo limpio</p><p className="text-sm text-gray-400 mt-2">Pulsa + para empezar</p></div>}
         {tareas.length > 0 && tareasFiltradas.length === 0 && !mensajeError && <div className="text-center py-12 opacity-70"><p className="text-4xl mb-2">🔍</p><p className="text-gray-400 dark:text-gray-500 text-sm">No encontramos tareas.</p></div>}
 
         <DragDropContext onDragEnd={handleOnDragEnd}>
             {filtrosActivos || modoSeleccion ? (
-               <ul className="space-y-3 pb-4">
+               <ul className="space-y-3">
                   {tareasFiltradas.map((tarea) => (
-                      <TareaItem key={tarea._id} tarea={tarea} toggleCompletada={toggleCompletada} iniciarEdicion={iniciarEdicion} confirmarBorrado={confirmarBorrado} esVencida={esVencida} obtenerColorBorde={obtenerColorBorde} obtenerEstiloCategoria={obtenerEstiloCategoria} seleccionadas={seleccionadas} toggleSeleccion={toggleSeleccion} modoSeleccion={modoSeleccion} menuAbiertoId={menuAbiertoId} toggleMenu={toggleMenu} />
+                      <TareaItem key={tarea._id} tarea={tarea} toggleCompletada={toggleCompletada} iniciarEdicion={iniciarEdicion} confirmarBorrado={confirmarBorradoUno} esVencida={esVencida} obtenerColorBorde={obtenerColorBorde} obtenerEstiloCategoria={obtenerEstiloCategoria} seleccionadas={seleccionadas} toggleSeleccion={toggleSeleccion} modoSeleccion={modoSeleccion} menuAbiertoId={menuAbiertoId} toggleMenu={toggleMenu} />
                   ))}
                </ul>
             ) : (
                <Droppable droppableId="lista-tareas">
                    {(provided) => (
-                       <ul className="space-y-3 pb-4" {...provided.droppableProps} ref={provided.innerRef}>
+                       <ul className="space-y-3" {...provided.droppableProps} ref={provided.innerRef}>
                            {tareasFiltradas.map((tarea, index) => (
                                <Draggable key={tarea._id} draggableId={tarea._id} index={index}>
                                    {(provided) => (
                                        <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}>
-                                           <TareaItem tarea={tarea} toggleCompletada={toggleCompletada} iniciarEdicion={iniciarEdicion} confirmarBorrado={confirmarBorrado} esVencida={esVencida} obtenerColorBorde={obtenerColorBorde} obtenerEstiloCategoria={obtenerEstiloCategoria} isDraggable={true} seleccionadas={seleccionadas} toggleSeleccion={toggleSeleccion} modoSeleccion={modoSeleccion} menuAbiertoId={menuAbiertoId} toggleMenu={toggleMenu} />
+                                           <TareaItem tarea={tarea} toggleCompletada={toggleCompletada} iniciarEdicion={iniciarEdicion} confirmarBorrado={confirmarBorradoUno} esVencida={esVencida} obtenerColorBorde={obtenerColorBorde} obtenerEstiloCategoria={obtenerEstiloCategoria} isDraggable={true} seleccionadas={seleccionadas} toggleSeleccion={toggleSeleccion} modoSeleccion={modoSeleccion} menuAbiertoId={menuAbiertoId} toggleMenu={toggleMenu} />
                                        </div>
                                    )}
                                </Draggable>
@@ -497,11 +440,17 @@ function App() {
         </DragDropContext>
 
       </div>
+
+      {/* --- BOTÓN FLOTANTE (FAB) PARA CREAR --- */}
+      <button onClick={abrirModalCrear} className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl flex items-center justify-center text-3xl font-bold transition-transform hover:scale-110 active:scale-95 z-40 border-2 border-white dark:border-gray-800">
+        +
+      </button>
+
     </div>
   );
 }
 
-// COMPONENTE TAREA (Sin cambios visuales)
+// COMPONENTE TAREA (TARJETAS MÁS LIMPIAS Y GRANDES)
 function TareaItem({ tarea, toggleCompletada, iniciarEdicion, confirmarBorrado, esVencida, obtenerColorBorde, obtenerEstiloCategoria, isDraggable, seleccionadas, toggleSeleccion, modoSeleccion, menuAbiertoId, toggleMenu }) {
     const estaVencida = esVencida(tarea.fechaLimite) && !tarea.completada;
     const claseBorde = obtenerColorBorde(tarea.prioridad);
@@ -509,54 +458,54 @@ function TareaItem({ tarea, toggleCompletada, iniciarEdicion, confirmarBorrado, 
     const menuAbierto = menuAbiertoId === tarea._id;
 
     return (
-        <li className={`group relative flex justify-between items-center p-3 rounded-lg border bg-white dark:bg-gray-800 dark:border-gray-700 hover:shadow-md transition-all ${claseBorde} ${tarea.completada && !modoSeleccion ? 'opacity-60 bg-gray-50 dark:bg-gray-800/50' : ''} ${estaSeleccionada ? 'ring-2 ring-red-300 dark:ring-red-600 bg-red-50 dark:bg-red-900/10' : ''}`}>
-            <div className="flex items-center gap-3 flex-1 overflow-hidden">
+        <li className={`group relative flex justify-between items-center p-4 rounded-xl shadow-sm border bg-white dark:bg-gray-800 dark:border-gray-700 transition-all ${claseBorde} ${tarea.completada && !modoSeleccion ? 'opacity-50 bg-gray-50 dark:bg-gray-800/50 grayscale' : ''} ${estaSeleccionada ? 'ring-2 ring-indigo-500 bg-indigo-50 dark:bg-indigo-900/10' : ''}`}>
+            <div className="flex items-center gap-4 flex-1 overflow-hidden">
                 
                 {modoSeleccion && (
-                     <div onClick={() => toggleSeleccion(tarea._id)} className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${estaSeleccionada ? 'bg-red-500 border-red-500' : 'border-gray-300 bg-white'}`}>
-                        {estaSeleccionada && <span className="text-white text-xs font-bold">✓</span>}
+                     <div onClick={() => toggleSeleccion(tarea._id)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-colors ${estaSeleccionada ? 'bg-indigo-500 border-indigo-500' : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700'}`}>
+                        {estaSeleccionada && <span className="text-white text-sm font-bold">✓</span>}
                      </div>
                 )}
 
                 {!modoSeleccion && (
-                    <>
-                        {isDraggable && <span className="text-gray-300 dark:text-gray-600 cursor-grab text-xl">:::</span>}
-                        <button onClick={() => toggleCompletada(tarea._id, tarea.completada)} className={`min-w-[24px] h-6 rounded-full border-2 flex items-center justify-center transition-colors ${tarea.completada ? 'bg-green-500 border-green-500' : 'border-gray-300 dark:border-gray-500 hover:border-indigo-500'}`}>
-                            {tarea.completada && <span className="text-white text-xs">✓</span>}
-                        </button>
-                    </>
+                    <button onClick={() => toggleCompletada(tarea._id, tarea.completada)} className={`min-w-[28px] h-7 rounded-full border-2 flex items-center justify-center transition-colors ${tarea.completada ? 'bg-green-500 border-green-500' : 'border-gray-300 dark:border-gray-500 hover:border-indigo-500'}`}>
+                        {tarea.completada && <span className="text-white text-sm">✓</span>}
+                    </button>
                 )}
 
                 <div className="flex flex-col flex-1">
-                    <span onClick={() => !modoSeleccion && toggleCompletada(tarea._id, tarea.completada)} className={`text-sm sm:text-lg truncate cursor-pointer select-none dark:text-gray-200 ${tarea.completada && !modoSeleccion ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700'}`}>{tarea.titulo}</span>
-                    <div className="flex gap-2 items-center mt-1 flex-wrap">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${obtenerEstiloCategoria(tarea.categoria || 'General')}`}>
+                    <span onClick={() => !modoSeleccion && toggleCompletada(tarea._id, tarea.completada)} className={`text-lg sm:text-xl font-semibold truncate cursor-pointer select-none dark:text-white ${tarea.completada && !modoSeleccion ? 'line-through text-gray-400' : 'text-gray-800'}`}>{tarea.titulo}</span>
+                    <div className="flex gap-2 items-center mt-1.5 flex-wrap">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${obtenerEstiloCategoria(tarea.categoria || 'General')}`}>
                             {tarea.categoria || 'General'}
                         </span>
-                        {tarea.prioridad === 'Alta' && <span className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded font-bold">ALTA</span>}
-                        {tarea.prioridad === 'Media' && <span className="text-[10px] bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-1.5 py-0.5 rounded font-bold">MEDIA</span>}
-                        {tarea.prioridad === 'Baja' && <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded font-bold">BAJA</span>}
-                        {tarea.fechaLimite && <span className={`text-xs ${estaVencida ? 'text-red-500 font-bold' : 'text-gray-400 dark:text-gray-500'}`}>{estaVencida && '⚠️ '} {new Date(tarea.fechaLimite).toLocaleDateString()}</span>}
+                        {tarea.fechaLimite && <span className={`text-xs font-medium flex items-center gap-1 ${estaVencida ? 'text-red-500 font-bold' : 'text-gray-400 dark:text-gray-500'}`}>{estaVencida ? '⚠️ Vencida:' : '📅'} {new Date(tarea.fechaLimite).toLocaleDateString()}</span>}
                     </div>
                 </div>
             </div>
 
             {!modoSeleccion && (
                 <div className="relative ml-2">
-                    <button onClick={(e) => toggleMenu(e, tarea._id)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 text-xl rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition">
-                        ⚙️
+                    <button onClick={(e) => toggleMenu(e, tarea._id)} className="text-gray-300 hover:text-gray-600 dark:hover:text-gray-200 p-2 text-xl rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition">
+                        ⋮
                     </button>
                     {menuAbierto && (
-                        <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-gray-800 shadow-xl rounded-lg border border-gray-100 dark:border-gray-600 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right">
-                            <button onClick={() => iniciarEdicion(tarea._id, tarea.titulo, tarea.fechaLimite, tarea.prioridad, tarea.categoria)} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
+                        <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-gray-800 shadow-xl rounded-xl border border-gray-100 dark:border-gray-600 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+                            <button onClick={() => iniciarEdicion(tarea._id, tarea.titulo, tarea.fechaLimite, tarea.prioridad, tarea.categoria)} className="w-full text-left px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
                                 ✏️ Editar
                             </button>
                             <div className="h-px bg-gray-100 dark:bg-gray-700"></div>
-                            <button onClick={() => confirmarBorrado(tarea._id)} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
+                            <button onClick={() => confirmarBorrado(tarea._id)} className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
                                 🗑 Borrar
                             </button>
                         </div>
                     )}
+                </div>
+            )}
+            
+            {!modoSeleccion && isDraggable && (
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-20 cursor-grab active:cursor-grabbing">
+                    :::
                 </div>
             )}
         </li>
