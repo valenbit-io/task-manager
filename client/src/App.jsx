@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback} from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { auth, logout } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import Login from './Login';
@@ -34,8 +34,8 @@ function App() {
 
   // ESTADOS NUEVOS PARA UI MEJORADA
   const [seleccionadas, setSeleccionadas] = useState([]);
-  const [modoSeleccion, setModoSeleccion] = useState(false); // ¿Está activo el modo borrar?
-  const [menuAbiertoId, setMenuAbiertoId] = useState(null); // ¿Qué tuerca está abierta?
+  const [modoSeleccion, setModoSeleccion] = useState(false); 
+  const [menuAbiertoId, setMenuAbiertoId] = useState(null); 
 
   // MODAL
   const [modal, setModal] = useState({
@@ -97,7 +97,7 @@ function App() {
   }, [recargar, obtenerIdUsuario]);
 
   const handleOnDragEnd = async (result) => {
-    if (!result.destination || modoSeleccion) return; // No mover si estamos borrando
+    if (!result.destination || modoSeleccion) return; 
     const items = Array.from(tareas);
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
@@ -220,7 +220,7 @@ function App() {
   };
 
   const toggleCompletada = async (id, estadoActual) => {
-    if (modoSeleccion) return; // No completar si estamos seleccionando
+    if (modoSeleccion) return; 
     await fetch(`${API_URL}/tareas/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -276,7 +276,7 @@ function App() {
   };
 
   const toggleMenu = (e, id) => {
-      e.stopPropagation(); // Evita que se cierre inmediatamente
+      e.stopPropagation(); 
       if (menuAbiertoId === id) setMenuAbiertoId(null);
       else setMenuAbiertoId(id);
   };
@@ -349,7 +349,7 @@ function App() {
             </div>
         </div>
 
-        <form onSubmit={agregarTarea} className="flex flex-col gap-4 mb-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-inner">
+        <form onSubmit={agregarTarea} className="flex flex-col gap-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-inner">
           <div className="w-full">
             <input type="text" className="bg-transparent w-full focus:outline-none text-gray-700 dark:text-white font-semibold text-lg placeholder-gray-400 dark:placeholder-gray-500" placeholder="¿Qué quieres lograr hoy?" value={nuevoTitulo} onChange={(e) => { setNuevoTitulo(e.target.value); setMensajeError(""); }} />
           </div>
@@ -375,14 +375,14 @@ function App() {
 
         {/* --- BOTÓN DE BORRADO MASIVO (SOLO SI HAY TAREAS) --- */}
         {tareas.length > 0 && !mensajeError && (
-             <div className="mb-4 flex justify-end">
+             <div className="mb-4">
                 {!modoSeleccion ? (
-                    <button onClick={activarModoSeleccion} className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 font-semibold underline decoration-dotted underline-offset-4 cursor-pointer">
-                        Eliminar varias tareas
+                    <button onClick={activarModoSeleccion} className="w-full bg-gray-400 dark:bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-500 dark:hover:bg-gray-500 transition shadow-lg shadow-gray-200 dark:shadow-none font-bold text-sm flex items-center justify-center gap-2 mt-2">
+                       <span>🗑</span> Eliminar tareas
                     </button>
                 ) : (
-                    <div className="flex gap-2 items-center w-full bg-red-50 dark:bg-red-900/20 p-2 rounded-lg border border-red-100 dark:border-red-800 animate-in slide-in-from-top-2">
-                        <span className="text-xs font-bold text-red-600 dark:text-red-300 flex-1">Selecciona las tareas a borrar</span>
+                    <div className="flex gap-2 items-center w-full bg-red-50 dark:bg-red-900/20 p-2 rounded-lg border border-red-100 dark:border-red-800 animate-in slide-in-from-top-2 mt-2">
+                        <span className="text-xs font-bold text-red-600 dark:text-red-300 flex-1">Selecciona para borrar...</span>
                         <button onClick={cancelarModoSeleccion} className="text-xs text-gray-500 px-3 py-1 bg-white dark:bg-gray-700 rounded border hover:bg-gray-50">Cancelar</button>
                         {seleccionadas.length > 0 && (
                             <button onClick={eliminarMultiples} className="text-xs text-white px-3 py-1 bg-red-500 rounded font-bold shadow-sm hover:bg-red-600">
