@@ -10,7 +10,10 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 function App() {
   const [usuario, setUsuario] = useState(null);
   const [cargandoUsuario, setCargandoUsuario] = useState(true);
+  
+  // LOGICA INVITADO
   const [modoInvitado, setModoInvitado] = useState(false);
+  const [invitadoId, setInvitadoId] = useState(""); 
 
   const [modoOscuro, setModoOscuro] = useState(() => {
     if (window.localStorage.getItem('theme') === 'dark') return true;
@@ -32,10 +35,10 @@ function App() {
   const [menuAbiertoId, setMenuAbiertoId] = useState(null); 
   const [menuBorradoAbierto, setMenuBorradoAbierto] = useState(false);
 
-  // MODAL (Maneja Crear, Editar y Borrar)
+  // MODAL
   const [modal, setModal] = useState({
     abierto: false,
-    tipo: null, // 'crear', 'editar', 'borrar-uno', 'borrar-seleccion', 'borrar-auto'
+    tipo: null, 
     idTarea: null,
     textoInput: "",
     fechaInput: "",
@@ -70,19 +73,22 @@ function App() {
 
   const obtenerIdUsuario = useCallback(() => {
     if (usuario) return usuario.uid;
-    if (modoInvitado) return "invitado_demo";
+    if (modoInvitado) return invitadoId; 
     return null;
-  }, [usuario, modoInvitado]);
+  }, [usuario, modoInvitado, invitadoId]);
 
+  // --- EFECTO DE AUTENTICACIÓN (Aquí limpiamos si se va el usuario) ---
   useEffect(() => {
     const suscripcion = onAuthStateChanged(auth, (u) => {
       setUsuario(u ? u : null);
+      if (!u) setTareas([]); // <--- ¡AQUÍ ES EL LUGAR SEGURO PARA LIMPIAR!
       setModoInvitado(false);
       setCargandoUsuario(false);
     });
     return () => suscripcion();
   }, []);
 
+  // --- EFECTO DE CARGA DE TAREAS (Solo busca, ya no limpia) ---
   useEffect(() => {
     const userId = obtenerIdUsuario();
     if (userId) {
@@ -90,11 +96,16 @@ function App() {
         try {
             const res = await fetch(`${API_URL}/tareas?usuarioId=${userId}`);
             const datos = await res.json();
-            setTareas(datos);
-        } catch (error) { console.error(error); }
+            setTareas(Array.isArray(datos) ? datos : []);
+        } catch (error) { 
+            console.error(error);
+            setTareas([]);
+        }
       };
       obtenerTareas();
     }
+    // Eliminamos el 'else' que causaba el error.
+    // Si no hay userId, no hacemos nada (la limpieza ya la hizo el efecto de Auth o el botón salir).
   }, [recargar, obtenerIdUsuario]);
 
   const esVencida = (fecha) => {
@@ -276,7 +287,16 @@ function App() {
     }
   };
 
-  const manejarSalir = () => { if (modoInvitado) setModoInvitado(false); else logout(); };
+  const manejarSalir = () => { 
+      // Limpiamos las tareas visualmente al salir
+      setTareas([]); 
+      
+      if (modoInvitado) {
+          setModoInvitado(false); 
+      } else {
+          logout(); 
+      }
+  };
   
   const obtenerColorBorde = (prioridad) => {
       if (prioridad === 'Alta') return 'border-l-4 border-l-red-500 dark:border-l-red-600';
@@ -297,12 +317,15 @@ function App() {
   const toggleMenu = (e, id) => { e.stopPropagation(); if (menuAbiertoId === id) setMenuAbiertoId(null); else setMenuAbiertoId(id); };
 
   if (cargandoUsuario) return <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-800 dark:text-white">Cargando...</div>;
-  if (!usuario && !modoInvitado) return <Login activarInvitado={() => setModoInvitado(true)} />;
+  if (!usuario && !modoInvitado) return <Login activarInvitado={() => { 
+      setModoInvitado(true); 
+      setInvitadoId(`guest_${Date.now()}_${Math.random()}`); // Generar ID único al entrar
+  }} />;
 
   return (
     <div className="min-h-screen transition-colors duration-300 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex flex-col items-center p-4 relative">
       
-      {/* --- MODAL UNIFICADO (AHORA INCLUYE 'CREAR') --- */}
+      {/* --- MODAL UNIFICADO --- */}
       {modal.abierto && (
         <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex justify-center items-center z-[100] transition-opacity p-4">
             <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200">
@@ -316,7 +339,7 @@ function App() {
                         <p className="text-center text-gray-600 dark:text-gray-300 font-medium">{modal.mensajeConfirmacion || "¿Estás seguro?"}</p>
                     </div>
                 ) : (
-                    // FORMULARIO DENTRO DEL MODAL (PARA CREAR Y EDITAR)
+                    // FORMULARIO DENTRO DEL MODAL
                     <div className="flex flex-col gap-4 mb-6">
                         <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Título</label><input autoFocus type="text" value={modal.textoInput} onChange={(e) => setModal({...modal, textoInput: e.target.value})} className="w-full border dark:border-gray-600 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white focus:outline-none text-lg font-medium" placeholder="Ej: Ir al gimnasio" /></div>
                         
@@ -361,7 +384,7 @@ function App() {
             <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2 overflow-hidden"><div className="bg-indigo-600 dark:bg-indigo-500 h-2 rounded-full transition-all duration-700 ease-out" style={{ width: `${porcentaje}%` }}></div></div>
         </div>
 
-        {/* BÚSQUEDA Y FILTROS (Más compactos) */}
+        {/* BÚSQUEDA Y FILTROS */}
         <div className="mb-4 flex flex-col gap-2">
             <input type="text" placeholder="🔍 Buscar..." className="w-full bg-white dark:bg-gray-800 border-none p-3 rounded-xl shadow-sm text-sm focus:ring-2 focus:ring-indigo-200 dark:text-white transition placeholder-gray-400 dark:placeholder-gray-500" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
             <div className="flex gap-2 w-full overflow-x-auto pb-1 no-scrollbar">
@@ -378,14 +401,14 @@ function App() {
         {tareas.length > 0 && !mensajeError && (
              <div className="mb-4 flex justify-end animate-in fade-in duration-300">
                 {!modoSeleccion ? (
-                    <div className="flex gap-px shadow-sm rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-                        <button onClick={activarModoSeleccion} className="text-gray-600 dark:text-gray-300 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition font-bold text-xs flex items-center gap-1">
+                    <div className="flex gap-px shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                        <button onClick={activarModoSeleccion} className="text-gray-600 dark:text-gray-300 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition font-bold text-xs flex items-center gap-1 rounded-l-lg">
                            <span>✨</span> Seleccionar
                         </button>
                         <div className="relative border-l border-gray-200 dark:border-gray-700">
-                            <button onClick={toggleMenuBorrado} className="h-full px-2 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-500 transition font-bold text-xs">▼</button>
+                            <button onClick={toggleMenuBorrado} className="h-full px-2 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-500 transition font-bold text-xs rounded-r-lg">▼</button>
                             {menuBorradoAbierto && (
-                                <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 shadow-xl rounded-lg border border-gray-100 dark:border-gray-600 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+                                <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 shadow-xl rounded-lg border border-gray-100 dark:border-gray-600 z-50 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
                                     <button onClick={() => solicitarBorradoRapido('completadas')} className="w-full text-left px-4 py-3 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">🧹 Borrar Completadas</button>
                                     <div className="h-px bg-gray-100 dark:bg-gray-700"></div>
                                     <button onClick={() => solicitarBorradoRapido('vencidas')} className="w-full text-left px-4 py-3 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">⏰ Borrar Vencidas</button>
@@ -450,7 +473,7 @@ function App() {
   );
 }
 
-// COMPONENTE TAREA (TARJETAS MÁS LIMPIAS Y GRANDES)
+// COMPONENTE TAREA
 function TareaItem({ tarea, toggleCompletada, iniciarEdicion, confirmarBorrado, esVencida, obtenerColorBorde, obtenerEstiloCategoria, isDraggable, seleccionadas, toggleSeleccion, modoSeleccion, menuAbiertoId, toggleMenu }) {
     const estaVencida = esVencida(tarea.fechaLimite) && !tarea.completada;
     const claseBorde = obtenerColorBorde(tarea.prioridad);
