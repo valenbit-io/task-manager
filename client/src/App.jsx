@@ -36,6 +36,9 @@ function App() {
   const [seleccionadas, setSeleccionadas] = useState([]);
   const [modoSeleccion, setModoSeleccion] = useState(false); 
   const [menuAbiertoId, setMenuAbiertoId] = useState(null); 
+  
+  // NUEVO: Estado para el menú de borrado masivo
+  const [menuBorradoAbierto, setMenuBorradoAbierto] = useState(false);
 
   // MODAL
   const [modal, setModal] = useState({
@@ -60,12 +63,18 @@ function App() {
 
   const toggleModoOscuro = () => setModoOscuro(!modoOscuro);
 
-  // Cierra el menú de tuerca si haces clic fuera
+  // Cierra los menús si haces clic fuera
   useEffect(() => {
-      const handleClickFuera = () => setMenuAbiertoId(null);
-      if (menuAbiertoId) document.addEventListener('click', handleClickFuera);
+      const handleClickFuera = () => {
+          setMenuAbiertoId(null);
+          setMenuBorradoAbierto(false);
+      };
+      // Agregamos un pequeño delay para que no se cierre inmediatamente al abrirlo
+      if (menuAbiertoId || menuBorradoAbierto) {
+          document.addEventListener('click', handleClickFuera);
+      }
       return () => document.removeEventListener('click', handleClickFuera);
-  }, [menuAbiertoId]);
+  }, [menuAbiertoId, menuBorradoAbierto]);
 
   const obtenerIdUsuario = useCallback(() => {
     if (usuario) return usuario.uid;
@@ -95,6 +104,11 @@ function App() {
       obtenerTareas();
     }
   }, [recargar, obtenerIdUsuario]);
+
+  const esVencida = (fecha) => {
+      if (!fecha) return false;
+      const hoy = new Date(); hoy.setHours(0,0,0,0); const fechaTarea = new Date(fecha); return fechaTarea < hoy;
+  };
 
   const handleOnDragEnd = async (result) => {
     if (!result.destination || modoSeleccion) return; 
@@ -137,7 +151,7 @@ function App() {
     setRecargar(!recargar);
   };
 
-  // --- LÓGICA DE BORRADO MÚLTIPLE ---
+  // --- LÓGICA DE BORRADO ---
   const activarModoSeleccion = () => {
       setModoSeleccion(true);
       setSeleccionadas([]);
@@ -148,6 +162,7 @@ function App() {
       setSeleccionadas([]);
   };
 
+  // Borrado Manual (Selección)
   const eliminarMultiples = async () => {
       if(!seleccionadas.length) return;
       if(!confirm(`¿Eliminar ${seleccionadas.length} tareas permanentemente?`)) return;
@@ -160,12 +175,47 @@ function App() {
       setRecargar(!recargar);
   };
 
+  // NUEVO: Borrado Automático (Categorías)
+  const ejecutarBorradoRapido = async (tipo) => {
+      let tareasABorrar = [];
+      let mensaje = "";
+
+      if (tipo === 'completadas') {
+          tareasABorrar = tareas.filter(t => t.completada);
+          mensaje = `¿Borrar las ${tareasABorrar.length} tareas completadas?`;
+      } else if (tipo === 'vencidas') {
+          tareasABorrar = tareas.filter(t => esVencida(t.fechaLimite) && !t.completada);
+          mensaje = `¿Borrar las ${tareasABorrar.length} tareas vencidas?`;
+      } else if (tipo === 'todas') {
+          tareasABorrar = tareas;
+          mensaje = `⚠️ ¡CUIDADO! ¿Estás seguro de que quieres borrar TODAS (${tareas.length}) las tareas?`;
+      }
+
+      if (tareasABorrar.length === 0) {
+          alert("No hay tareas de este tipo para borrar.");
+          setMenuBorradoAbierto(false);
+          return;
+      }
+
+      if (!confirm(mensaje)) return;
+
+      // Ejecutar borrado
+      await Promise.all(tareasABorrar.map(t => fetch(`${API_URL}/tareas/${t._id}`, { method: 'DELETE' })));
+      setRecargar(!recargar);
+      setMenuBorradoAbierto(false);
+  };
+
   const toggleSeleccion = (id) => {
       if(seleccionadas.includes(id)) {
           setSeleccionadas(seleccionadas.filter(item => item !== id));
       } else {
           setSeleccionadas([...seleccionadas, id]);
       }
+  };
+
+  const toggleMenuBorrado = (e) => {
+      e.stopPropagation();
+      setMenuBorradoAbierto(!menuBorradoAbierto);
   };
 
   const apiEditar = async (id, nuevoTexto, nuevaFechaEditada, nuevaPrioridadEditada, nuevaCategoriaEditada) => {
@@ -255,10 +305,7 @@ function App() {
   };
 
   const manejarSalir = () => { if (modoInvitado) setModoInvitado(false); else logout(); };
-  const esVencida = (fecha) => {
-      if (!fecha) return false;
-      const hoy = new Date(); hoy.setHours(0,0,0,0); const fechaTarea = new Date(fecha); return fechaTarea < hoy;
-  };
+  
   const obtenerColorBorde = (prioridad) => {
       if (prioridad === 'Alta') return 'border-l-4 border-l-red-500 dark:border-l-red-600';
       if (prioridad === 'Baja') return 'border-l-4 border-l-blue-400 dark:border-l-blue-500';
@@ -373,15 +420,38 @@ function App() {
           </button>
         </form>
 
-        {/* --- BOTÓN DE BORRADO MASIVO (SOLO SI HAY TAREAS) --- */}
+        {/* --- BARRA DE BORRADO MASIVO --- */}
         {tareas.length > 0 && !mensajeError && (
-             <div className="mb-4">
+             <div className="mb-4 mt-2">
                 {!modoSeleccion ? (
-                    <button onClick={activarModoSeleccion} className="w-full bg-gray-400 dark:bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-500 dark:hover:bg-gray-500 transition shadow-lg shadow-gray-200 dark:shadow-none font-bold text-sm flex items-center justify-center gap-2 mt-2">
-                       <span>🗑</span> Eliminar tareas
-                    </button>
+                    <div className="flex gap-1">
+                        <button onClick={activarModoSeleccion} className="flex-1 bg-gray-400 dark:bg-gray-600 text-white py-2 rounded-l-lg hover:bg-gray-500 dark:hover:bg-gray-500 transition shadow-sm font-bold text-sm flex items-center justify-center gap-2">
+                           <span>🗑</span> Seleccionar para borrar
+                        </button>
+                        <div className="relative">
+                            <button onClick={toggleMenuBorrado} className="h-full bg-gray-400 dark:bg-gray-600 text-white px-3 rounded-r-lg hover:bg-gray-500 dark:hover:bg-gray-500 transition shadow-sm font-bold border-l border-gray-300 dark:border-gray-500">
+                                ▼
+                            </button>
+                            {/* MENU DESPLEGABLE DE BORRADO */}
+                            {menuBorradoAbierto && (
+                                <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 shadow-xl rounded-lg border border-gray-100 dark:border-gray-600 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+                                    <button onClick={() => ejecutarBorradoRapido('completadas')} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
+                                        🧹 Borrar Completadas
+                                    </button>
+                                    <div className="h-px bg-gray-100 dark:bg-gray-700"></div>
+                                    <button onClick={() => ejecutarBorradoRapido('vencidas')} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
+                                        ⏰ Borrar Vencidas
+                                    </button>
+                                    <div className="h-px bg-gray-100 dark:bg-gray-700"></div>
+                                    <button onClick={() => ejecutarBorradoRapido('todas')} className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
+                                        💥 Borrar TODAS
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 ) : (
-                    <div className="flex gap-2 items-center w-full bg-red-50 dark:bg-red-900/20 p-2 rounded-lg border border-red-100 dark:border-red-800 animate-in slide-in-from-top-2 mt-2">
+                    <div className="flex gap-2 items-center w-full bg-red-50 dark:bg-red-900/20 p-2 rounded-lg border border-red-100 dark:border-red-800 animate-in slide-in-from-top-2">
                         <span className="text-xs font-bold text-red-600 dark:text-red-300 flex-1">Selecciona para borrar...</span>
                         <button onClick={cancelarModoSeleccion} className="text-xs text-gray-500 px-3 py-1 bg-white dark:bg-gray-700 rounded border hover:bg-gray-50">Cancelar</button>
                         {seleccionadas.length > 0 && (
@@ -431,7 +501,7 @@ function App() {
   );
 }
 
-// COMPONENTE TAREA ACTUALIZADO (Con Menú de Tuerca y Modo Selección)
+// COMPONENTE TAREA (Sin cambios visuales)
 function TareaItem({ tarea, toggleCompletada, iniciarEdicion, confirmarBorrado, esVencida, obtenerColorBorde, obtenerEstiloCategoria, isDraggable, seleccionadas, toggleSeleccion, modoSeleccion, menuAbiertoId, toggleMenu }) {
     const estaVencida = esVencida(tarea.fechaLimite) && !tarea.completada;
     const claseBorde = obtenerColorBorde(tarea.prioridad);
@@ -442,14 +512,12 @@ function TareaItem({ tarea, toggleCompletada, iniciarEdicion, confirmarBorrado, 
         <li className={`group relative flex justify-between items-center p-3 rounded-lg border bg-white dark:bg-gray-800 dark:border-gray-700 hover:shadow-md transition-all ${claseBorde} ${tarea.completada && !modoSeleccion ? 'opacity-60 bg-gray-50 dark:bg-gray-800/50' : ''} ${estaSeleccionada ? 'ring-2 ring-red-300 dark:ring-red-600 bg-red-50 dark:bg-red-900/10' : ''}`}>
             <div className="flex items-center gap-3 flex-1 overflow-hidden">
                 
-                {/* 1. MODO SELECCIÓN: CHECKBOX */}
                 {modoSeleccion && (
                      <div onClick={() => toggleSeleccion(tarea._id)} className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${estaSeleccionada ? 'bg-red-500 border-red-500' : 'border-gray-300 bg-white'}`}>
                         {estaSeleccionada && <span className="text-white text-xs font-bold">✓</span>}
                      </div>
                 )}
 
-                {/* 2. MODO NORMAL: DRAG HANDLE Y CHECKBOX COMPLETAR */}
                 {!modoSeleccion && (
                     <>
                         {isDraggable && <span className="text-gray-300 dark:text-gray-600 cursor-grab text-xl">:::</span>}
@@ -473,14 +541,11 @@ function TareaItem({ tarea, toggleCompletada, iniciarEdicion, confirmarBorrado, 
                 </div>
             </div>
 
-            {/* 3. TUERCA DE CONFIGURACIÓN (SOLO VISIBLE SI NO ESTAMOS BORRANDO MASIVAMENTE) */}
             {!modoSeleccion && (
                 <div className="relative ml-2">
                     <button onClick={(e) => toggleMenu(e, tarea._id)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 text-xl rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition">
                         ⚙️
                     </button>
-                    
-                    {/* MENÚ DESPLEGABLE FLOTANTE */}
                     {menuAbierto && (
                         <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-gray-800 shadow-xl rounded-lg border border-gray-100 dark:border-gray-600 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right">
                             <button onClick={() => iniciarEdicion(tarea._id, tarea.titulo, tarea.fechaLimite, tarea.prioridad, tarea.categoria)} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
