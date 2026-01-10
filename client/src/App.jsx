@@ -32,6 +32,9 @@ function App() {
   const [filtroPrioridad, setFiltroPrioridad] = useState("Todas");
   const [filtroCategoria, setFiltroCategoria] = useState("Todas");
 
+  // NUEVO ESTADO: Para las tareas seleccionadas
+  const [seleccionadas, setSeleccionadas] = useState([]);
+
   // MODAL
   const [modal, setModal] = useState({
     abierto: false,
@@ -125,6 +128,29 @@ function App() {
     setRecargar(!recargar);
   };
 
+  // NUEVA FUNCIÓN: Eliminar múltiples tareas
+  const eliminarMultiples = async () => {
+      if(!seleccionadas.length) return;
+      if(!confirm(`¿Estás seguro de borrar ${seleccionadas.length} tareas?`)) return;
+
+      // Borramos todas las seleccionadas una por una
+      await Promise.all(seleccionadas.map(id => 
+          fetch(`${API_URL}/tareas/${id}`, { method: 'DELETE' })
+      ));
+      
+      setSeleccionadas([]); // Limpiar selección
+      setRecargar(!recargar); // Recargar lista
+  };
+
+  // NUEVA FUNCIÓN: Manejar checkbox
+  const toggleSeleccion = (id) => {
+      if(seleccionadas.includes(id)) {
+          setSeleccionadas(seleccionadas.filter(item => item !== id));
+      } else {
+          setSeleccionadas([...seleccionadas, id]);
+      }
+  };
+
   const apiEditar = async (id, nuevoTexto, nuevaFechaEditada, nuevaPrioridadEditada, nuevaCategoriaEditada) => {
     const fechaConHora = nuevaFechaEditada ? nuevaFechaEditada + "T12:00:00" : "";
     await fetch(`${API_URL}/tareas/${id}`, {
@@ -177,7 +203,7 @@ function App() {
   };
 
   const toggleCompletada = async (id, estadoActual) => {
-    await fetch(`http://localhost:5000/tareas/${id}`, {
+    await fetch(`${API_URL}/tareas/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ completada: !estadoActual })
@@ -276,28 +302,34 @@ function App() {
 
         <div className="mb-6"><div className="flex justify-between items-end mb-1"><span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{obtenerMensajeProgreso()}</span><span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{tareasCompletadas} de {totalTareas}</span></div><div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden"><div className="bg-indigo-600 dark:bg-indigo-500 h-2.5 rounded-full transition-all duration-700 ease-out" style={{ width: `${porcentaje}%` }}></div></div></div>
 
-        {/* --- BARRA DE BÚSQUEDA Y FILTROS MEJORADA (MÓVIL) --- */}
-        <div className="mb-6 flex flex-col sm:flex-row gap-2">
-            <input type="text" placeholder="🔍 Buscar tarea..." className="w-full bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 dark:text-white transition placeholder-gray-400 dark:placeholder-gray-500" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-            
-            {/* AQUÍ ESTÁ EL CAMBIO DE DISEÑO PARA MÓVIL (GRID) */}
-            <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
-                <select className="bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-xs focus:ring-2 focus:ring-indigo-200 transition text-gray-600 dark:text-gray-200 font-semibold cursor-pointer w-full" value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)}>
-                    <option value="Todas">Todas</option>
-                    <option value="General">⚙️ General</option>
-                    <option value="Trabajo">💼 Trabajo</option>
-                    <option value="Personal">👤 Personal</option>
-                    <option value="Estudio">📚 Estudio</option>
-                    <option value="Hogar">🏠 Hogar</option>
-                </select>
-                
-                <select className="bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-xs focus:ring-2 focus:ring-indigo-200 transition text-gray-600 dark:text-gray-200 font-semibold cursor-pointer w-full" value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)}>
-                    <option value="Todas">Prioridad</option>
-                    <option value="Alta">🔥 Alta</option>
-                    <option value="Media">⚡ Media</option>
-                    <option value="Baja">☕ Baja</option>
-                </select>
+        {/* --- BARRA DE BÚSQUEDA Y FILTROS MEJORADA --- */}
+        <div className="mb-6 flex flex-col gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
+                <input type="text" placeholder="🔍 Buscar tarea..." className="w-full bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 dark:text-white transition placeholder-gray-400 dark:placeholder-gray-500" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+                <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
+                    <select className="bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-xs focus:ring-2 focus:ring-indigo-200 transition text-gray-600 dark:text-gray-200 font-semibold cursor-pointer w-full" value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)}>
+                        <option value="Todas">Todas</option>
+                        <option value="General">⚙️ General</option>
+                        <option value="Trabajo">💼 Trabajo</option>
+                        <option value="Personal">👤 Personal</option>
+                        <option value="Estudio">📚 Estudio</option>
+                        <option value="Hogar">🏠 Hogar</option>
+                    </select>
+                    <select className="bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-xs focus:ring-2 focus:ring-indigo-200 transition text-gray-600 dark:text-gray-200 font-semibold cursor-pointer w-full" value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)}>
+                        <option value="Todas">Prioridad</option>
+                        <option value="Alta">🔥 Alta</option>
+                        <option value="Media">⚡ Media</option>
+                        <option value="Baja">☕ Baja</option>
+                    </select>
+                </div>
             </div>
+
+            {/* BOTÓN PARA BORRAR SELECCIONADAS (Solo visible si hay selección) */}
+            {seleccionadas.length > 0 && (
+                <button onClick={eliminarMultiples} className="w-full py-1 bg-red-100 text-red-600 text-xs font-bold rounded hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 transition animate-pulse">
+                    🗑 Borrar {seleccionadas.length} tareas seleccionadas
+                </button>
+            )}
         </div>
 
         <form onSubmit={agregarTarea} className="flex flex-col gap-4 mb-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-inner">
@@ -307,16 +339,12 @@ function App() {
 
           <div className="w-full h-px bg-gray-200 dark:bg-gray-600"></div>
 
-          {/* AQUÍ ESTÁ EL ARREGLO DEL FORMULARIO PARA MÓVIL (FLEX-WRAP) */}
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full">
             <div className="flex items-center flex-1 min-w-[140px] gap-1">
                 <select value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} className="bg-transparent text-xs font-bold text-gray-600 dark:text-gray-300 focus:outline-none cursor-pointer hover:text-indigo-600 h-10 flex-1" title="Categoría"><option value="General">⚙️ General</option><option value="Trabajo">💼 Trabajo</option><option value="Personal">👤 Personal</option><option value="Estudio">📚 Estudio</option><option value="Hogar">🏠 Hogar</option></select>
-                
                 <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
-                
                 <select value={nuevaPrioridad} onChange={(e) => setNuevaPrioridad(e.target.value)} className="bg-transparent text-xs font-bold text-gray-600 dark:text-gray-300 focus:outline-none cursor-pointer hover:text-indigo-600 h-10 flex-1" title="Prioridad"><option value="Alta">🔥 Alta</option><option value="Media">⚡ Media</option><option value="Baja">☕ Baja</option></select>
             </div>
-            
             <div className="relative flex items-center bg-white dark:bg-gray-600 hover:bg-indigo-50 dark:hover:bg-gray-500 border border-gray-200 dark:border-gray-500 rounded-lg px-2 transition-colors cursor-pointer group shadow-sm h-10 w-full sm:w-auto mt-2 sm:mt-0">
                 <span className="text-lg mr-1 group-hover:scale-110 transition-transform">📅</span>
                 <input type="date" className={`bg-transparent text-xs focus:outline-none cursor-pointer font-medium w-full sm:w-auto ${nuevaFecha ? 'text-gray-700 dark:text-white' : 'text-gray-400 dark:text-gray-400'}`} value={nuevaFecha} onChange={(e) => setNuevaFecha(e.target.value)} />
@@ -337,7 +365,7 @@ function App() {
             {filtrosActivos ? (
                <ul className="space-y-3 pb-4">
                   {tareasFiltradas.map((tarea) => (
-                      <TareaItem key={tarea._id} tarea={tarea} toggleCompletada={toggleCompletada} iniciarEdicion={iniciarEdicion} confirmarBorrado={confirmarBorrado} esVencida={esVencida} obtenerColorBorde={obtenerColorBorde} obtenerEstiloCategoria={obtenerEstiloCategoria} />
+                      <TareaItem key={tarea._id} tarea={tarea} toggleCompletada={toggleCompletada} iniciarEdicion={iniciarEdicion} confirmarBorrado={confirmarBorrado} esVencida={esVencida} obtenerColorBorde={obtenerColorBorde} obtenerEstiloCategoria={obtenerEstiloCategoria} seleccionadas={seleccionadas} toggleSeleccion={toggleSeleccion} />
                   ))}
                </ul>
             ) : (
@@ -348,7 +376,7 @@ function App() {
                                <Draggable key={tarea._id} draggableId={tarea._id} index={index}>
                                    {(provided) => (
                                        <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}>
-                                           <TareaItem tarea={tarea} toggleCompletada={toggleCompletada} iniciarEdicion={iniciarEdicion} confirmarBorrado={confirmarBorrado} esVencida={esVencida} obtenerColorBorde={obtenerColorBorde} obtenerEstiloCategoria={obtenerEstiloCategoria} isDraggable={true} />
+                                           <TareaItem tarea={tarea} toggleCompletada={toggleCompletada} iniciarEdicion={iniciarEdicion} confirmarBorrado={confirmarBorrado} esVencida={esVencida} obtenerColorBorde={obtenerColorBorde} obtenerEstiloCategoria={obtenerEstiloCategoria} isDraggable={true} seleccionadas={seleccionadas} toggleSeleccion={toggleSeleccion} />
                                        </div>
                                    )}
                                </Draggable>
@@ -365,35 +393,44 @@ function App() {
   );
 }
 
-function TareaItem({ tarea, toggleCompletada, iniciarEdicion, confirmarBorrado, esVencida, obtenerColorBorde, obtenerEstiloCategoria, isDraggable }) {
+// COMPONENTE ACTUALIZADO CON CHECKBOX Y BOTONES VISIBLES
+function TareaItem({ tarea, toggleCompletada, iniciarEdicion, confirmarBorrado, esVencida, obtenerColorBorde, obtenerEstiloCategoria, isDraggable, seleccionadas, toggleSeleccion }) {
     const estaVencida = esVencida(tarea.fechaLimite) && !tarea.completada;
     const claseBorde = obtenerColorBorde(tarea.prioridad);
+    const estaSeleccionada = seleccionadas.includes(tarea._id);
 
     return (
-        <li className={`group flex justify-between items-center p-4 rounded-lg border bg-white dark:bg-gray-800 dark:border-gray-700 hover:shadow-md transition-all ${claseBorde} ${tarea.completada ? 'opacity-60 bg-gray-50 dark:bg-gray-800/50' : ''}`}>
+        <li className={`group flex justify-between items-center p-3 rounded-lg border bg-white dark:bg-gray-800 dark:border-gray-700 hover:shadow-md transition-all ${claseBorde} ${tarea.completada ? 'opacity-60 bg-gray-50 dark:bg-gray-800/50' : ''} ${estaSeleccionada ? 'ring-2 ring-indigo-300 dark:ring-indigo-600 bg-indigo-50 dark:bg-indigo-900/10' : ''}`}>
             <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                
+                {/* CHECKBOX DE SELECCIÓN */}
+                <input 
+                    type="checkbox" 
+                    checked={estaSeleccionada} 
+                    onChange={() => toggleSeleccion(tarea._id)}
+                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+
                 {isDraggable && <span className="text-gray-300 dark:text-gray-600 cursor-grab text-xl">:::</span>}
                 
                 <button onClick={() => toggleCompletada(tarea._id, tarea.completada)} className={`min-w-[24px] h-6 rounded-full border-2 flex items-center justify-center transition-colors ${tarea.completada ? 'bg-green-500 border-green-500' : 'border-gray-300 dark:border-gray-500 hover:border-indigo-500'}`}>
                     {tarea.completada && <span className="text-white text-xs">✓</span>}
                 </button>
                 <div className="flex flex-col">
-                    <span onClick={() => toggleCompletada(tarea._id, tarea.completada)} className={`text-lg truncate cursor-pointer select-none dark:text-gray-200 ${tarea.completada ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700'}`}>{tarea.titulo}</span>
+                    <span onClick={() => toggleCompletada(tarea._id, tarea.completada)} className={`text-sm sm:text-lg truncate cursor-pointer select-none dark:text-gray-200 ${tarea.completada ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700'}`}>{tarea.titulo}</span>
                     <div className="flex gap-2 items-center mt-1 flex-wrap">
-                        {/* ETIQUETA CATEGORÍA */}
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${obtenerEstiloCategoria(tarea.categoria || 'General')}`}>
                             {tarea.categoria || 'General'}
                         </span>
-
                         {tarea.prioridad === 'Alta' && <span className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded font-bold">ALTA</span>}
                         {tarea.prioridad === 'Media' && <span className="text-[10px] bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-1.5 py-0.5 rounded font-bold">MEDIA</span>}
                         {tarea.prioridad === 'Baja' && <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded font-bold">BAJA</span>}
-                        
                         {tarea.fechaLimite && <span className={`text-xs ${estaVencida ? 'text-red-500 font-bold' : 'text-gray-400 dark:text-gray-500'}`}>{estaVencida && '⚠️ '} {new Date(tarea.fechaLimite).toLocaleDateString()}</span>}
                     </div>
                 </div>
             </div>
-            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* BOTONES SIEMPRE VISIBLES (Sin opacity-0) */}
+            <div className="flex gap-1 ml-2">
                 <button onClick={() => iniciarEdicion(tarea._id, tarea.titulo, tarea.fechaLimite, tarea.prioridad, tarea.categoria)} className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-2 rounded">✎</button>
                 <button onClick={() => confirmarBorrado(tarea._id)} className="text-gray-400 hover:text-red-600 dark:hover:text-red-400 p-2 rounded">🗑</button>
             </div>
