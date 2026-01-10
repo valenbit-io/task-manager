@@ -4,6 +4,9 @@ import { onAuthStateChanged } from 'firebase/auth';
 import Login from './Login';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
+// Si estamos en Vercel usa la nube, si no, usa mi compu
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 function App() {
   const [usuario, setUsuario] = useState(null);
   const [cargandoUsuario, setCargandoUsuario] = useState(true);
@@ -72,7 +75,7 @@ function App() {
     if (userId) {
       const obtenerTareas = async () => {
         try {
-            const res = await fetch(`http://localhost:5000/tareas?usuarioId=${userId}`);
+            const res = await fetch(`${API_URL}/tareas?usuarioId=${userId}`);
             const datos = await res.json();
             setTareas(datos);
         } catch (error) { console.error(error); }
@@ -89,7 +92,7 @@ function App() {
     setTareas(items);
     const tareasParaActualizar = items.map((tarea, index) => ({ _id: tarea._id, orden: index }));
     try {
-        await fetch('http://localhost:5000/tareas/reordenar/lista', {
+        await fetch(`${API_URL}/tareas/reordenar/lista`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tareas: tareasParaActualizar })
@@ -118,13 +121,13 @@ function App() {
   const filtrosActivos = busqueda !== "" || filtroPrioridad !== "Todas" || filtroCategoria !== "Todas";
 
   const apiEliminar = async (id) => {
-    await fetch(`http://localhost:5000/tareas/${id}`, { method: 'DELETE' });
+    await fetch(`${API_URL}/tareas/${id}`, { method: 'DELETE' });
     setRecargar(!recargar);
   };
 
   const apiEditar = async (id, nuevoTexto, nuevaFechaEditada, nuevaPrioridadEditada, nuevaCategoriaEditada) => {
     const fechaConHora = nuevaFechaEditada ? nuevaFechaEditada + "T12:00:00" : "";
-    await fetch(`http://localhost:5000/tareas/${id}`, {
+    await fetch(`${API_URL}/tareas/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -155,7 +158,7 @@ function App() {
     const userId = obtenerIdUsuario();
     const fechaConHora = nuevaFecha ? nuevaFecha + "T12:00:00" : "";
 
-    await fetch('http://localhost:5000/tareas', {
+    await fetch(`${API_URL}/tareas`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -234,7 +237,7 @@ function App() {
   return (
     <div className="min-h-screen transition-colors duration-300 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       {modal.abierto && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 transition-opacity">
+        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 transition-opacity p-4">
             <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-100 dark:border-gray-700">
                 <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4 border-b border-gray-100 dark:border-gray-700 pb-2">{modal.tipo === 'borrar' ? 'Eliminar Tarea' : 'Editar Tarea'}</h3>
                 {modal.tipo === 'borrar' ? (
@@ -263,7 +266,7 @@ function App() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-lg relative transition-colors duration-300">
+      <div className="bg-white dark:bg-gray-800 p-4 sm:p-8 rounded-xl shadow-2xl w-full max-w-lg relative transition-colors duration-300">
         <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-3">{usuario?.photoURL ? <img src={usuario.photoURL} alt="Avatar" className="w-10 h-10 rounded-full border-2 border-blue-500" /> : <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-lg">Inv</div>}<div><h2 className="text-sm font-bold text-gray-800 dark:text-white">{usuario ? usuario.displayName : "Invitado"}</h2></div></div>
             <div className="flex items-center gap-3"><button onClick={toggleModoOscuro} className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-yellow-400 hover:scale-110">{modoOscuro ? "☀️" : "🌙"}</button><button onClick={manejarSalir} className="text-xs text-red-500 hover:underline font-semibold">Salir</button></div>
@@ -273,14 +276,14 @@ function App() {
 
         <div className="mb-6"><div className="flex justify-between items-end mb-1"><span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{obtenerMensajeProgreso()}</span><span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{tareasCompletadas} de {totalTareas}</span></div><div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden"><div className="bg-indigo-600 dark:bg-indigo-500 h-2.5 rounded-full transition-all duration-700 ease-out" style={{ width: `${porcentaje}%` }}></div></div></div>
 
-        {/* --- BARRA DE BÚSQUEDA Y FILTROS MEJORADA --- */}
+        {/* --- BARRA DE BÚSQUEDA Y FILTROS MEJORADA (MÓVIL) --- */}
         <div className="mb-6 flex flex-col sm:flex-row gap-2">
             <input type="text" placeholder="🔍 Buscar tarea..." className="w-full bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 dark:text-white transition placeholder-gray-400 dark:placeholder-gray-500" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
             
-            {/* FILTROS CON TEXTO COMPLETO */}
-            <div className="flex gap-2">
-                <select className="bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-xs focus:ring-2 focus:ring-indigo-200 transition text-gray-600 dark:text-gray-200 font-semibold cursor-pointer" value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)}>
-                    <option value="Todas">Todas las Categorías</option>
+            {/* AQUÍ ESTÁ EL CAMBIO DE DISEÑO PARA MÓVIL (GRID) */}
+            <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
+                <select className="bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-xs focus:ring-2 focus:ring-indigo-200 transition text-gray-600 dark:text-gray-200 font-semibold cursor-pointer w-full" value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)}>
+                    <option value="Todas">Todas</option>
                     <option value="General">⚙️ General</option>
                     <option value="Trabajo">💼 Trabajo</option>
                     <option value="Personal">👤 Personal</option>
@@ -288,8 +291,8 @@ function App() {
                     <option value="Hogar">🏠 Hogar</option>
                 </select>
                 
-                <select className="bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-xs focus:ring-2 focus:ring-indigo-200 transition text-gray-600 dark:text-gray-200 font-semibold cursor-pointer" value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)}>
-                    <option value="Todas">Todas las Prioridades</option>
+                <select className="bg-gray-100 dark:bg-gray-700 border-none p-2 rounded-lg text-xs focus:ring-2 focus:ring-indigo-200 transition text-gray-600 dark:text-gray-200 font-semibold cursor-pointer w-full" value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)}>
+                    <option value="Todas">Prioridad</option>
                     <option value="Alta">🔥 Alta</option>
                     <option value="Media">⚡ Media</option>
                     <option value="Baja">☕ Baja</option>
@@ -304,16 +307,19 @@ function App() {
 
           <div className="w-full h-px bg-gray-200 dark:bg-gray-600"></div>
 
-          <div className="flex items-center gap-2 w-full">
-            <select value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} className="bg-transparent text-xs font-bold text-gray-600 dark:text-gray-300 focus:outline-none cursor-pointer hover:text-indigo-600 h-10" title="Categoría"><option value="General">⚙️ General</option><option value="Trabajo">💼 Trabajo</option><option value="Personal">👤 Personal</option><option value="Estudio">📚 Estudio</option><option value="Hogar">🏠 Hogar</option></select>
+          {/* AQUÍ ESTÁ EL ARREGLO DEL FORMULARIO PARA MÓVIL (FLEX-WRAP) */}
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full">
+            <div className="flex items-center flex-1 min-w-[140px] gap-1">
+                <select value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} className="bg-transparent text-xs font-bold text-gray-600 dark:text-gray-300 focus:outline-none cursor-pointer hover:text-indigo-600 h-10 flex-1" title="Categoría"><option value="General">⚙️ General</option><option value="Trabajo">💼 Trabajo</option><option value="Personal">👤 Personal</option><option value="Estudio">📚 Estudio</option><option value="Hogar">🏠 Hogar</option></select>
+                
+                <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
+                
+                <select value={nuevaPrioridad} onChange={(e) => setNuevaPrioridad(e.target.value)} className="bg-transparent text-xs font-bold text-gray-600 dark:text-gray-300 focus:outline-none cursor-pointer hover:text-indigo-600 h-10 flex-1" title="Prioridad"><option value="Alta">🔥 Alta</option><option value="Media">⚡ Media</option><option value="Baja">☕ Baja</option></select>
+            </div>
             
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
-            
-            <select value={nuevaPrioridad} onChange={(e) => setNuevaPrioridad(e.target.value)} className="bg-transparent text-xs font-bold text-gray-600 dark:text-gray-300 focus:outline-none cursor-pointer hover:text-indigo-600 h-10" title="Prioridad"><option value="Alta">🔥 Alta</option><option value="Media">⚡ Media</option><option value="Baja">☕ Baja</option></select>
-            
-            <div className="relative flex items-center bg-white dark:bg-gray-600 hover:bg-indigo-50 dark:hover:bg-gray-500 border border-gray-200 dark:border-gray-500 rounded-lg px-2 transition-colors cursor-pointer group shadow-sm ml-auto h-10">
+            <div className="relative flex items-center bg-white dark:bg-gray-600 hover:bg-indigo-50 dark:hover:bg-gray-500 border border-gray-200 dark:border-gray-500 rounded-lg px-2 transition-colors cursor-pointer group shadow-sm h-10 w-full sm:w-auto mt-2 sm:mt-0">
                 <span className="text-lg mr-1 group-hover:scale-110 transition-transform">📅</span>
-                <input type="date" className={`bg-transparent text-xs focus:outline-none cursor-pointer font-medium w-auto ${nuevaFecha ? 'text-gray-700 dark:text-white' : 'text-gray-400 dark:text-gray-400'}`} value={nuevaFecha} onChange={(e) => setNuevaFecha(e.target.value)} />
+                <input type="date" className={`bg-transparent text-xs focus:outline-none cursor-pointer font-medium w-full sm:w-auto ${nuevaFecha ? 'text-gray-700 dark:text-white' : 'text-gray-400 dark:text-gray-400'}`} value={nuevaFecha} onChange={(e) => setNuevaFecha(e.target.value)} />
             </div>
           </div>
 
