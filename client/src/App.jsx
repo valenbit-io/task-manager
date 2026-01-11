@@ -474,11 +474,19 @@ function App() {
 }
 
 // COMPONENTE TAREA
+// COMPONENTE TAREA (Reemplaza el que tienes al final)
 function TareaItem({ tarea, toggleCompletada, iniciarEdicion, confirmarBorrado, esVencida, obtenerColorBorde, obtenerEstiloCategoria, isDraggable, seleccionadas, toggleSeleccion, modoSeleccion, menuAbiertoId, toggleMenu }) {
     const estaVencida = esVencida(tarea.fechaLimite) && !tarea.completada;
     const claseBorde = obtenerColorBorde(tarea.prioridad);
     const estaSeleccionada = seleccionadas.includes(tarea._id);
     const menuAbierto = menuAbiertoId === tarea._id;
+
+    // Función interna para el color de la ETIQUETA (Badge)
+    const obtenerColorBadge = (p) => {
+        if (p === 'Alta') return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800';
+        if (p === 'Media') return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800';
+        return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800';
+    };
 
     return (
         <li className={`group relative flex justify-between items-center p-4 rounded-xl shadow-sm border bg-white dark:bg-gray-800 dark:border-gray-700 transition-all ${claseBorde} ${tarea.completada && !modoSeleccion ? 'opacity-50 bg-gray-50 dark:bg-gray-800/50 grayscale' : ''} ${estaSeleccionada ? 'ring-2 ring-indigo-500 bg-indigo-50 dark:bg-indigo-900/10' : ''}`}>
@@ -498,10 +506,20 @@ function TareaItem({ tarea, toggleCompletada, iniciarEdicion, confirmarBorrado, 
 
                 <div className="flex flex-col flex-1">
                     <span onClick={() => !modoSeleccion && toggleCompletada(tarea._id, tarea.completada)} className={`text-lg sm:text-xl font-semibold truncate cursor-pointer select-none dark:text-white ${tarea.completada && !modoSeleccion ? 'line-through text-gray-400' : 'text-gray-800'}`}>{tarea.titulo}</span>
+                    
+                    {/* AQUÍ ESTÁN LAS ETIQUETAS */}
                     <div className="flex gap-2 items-center mt-1.5 flex-wrap">
+                        {/* 1. Etiqueta de PRIORIDAD (Nueva) */}
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider border ${obtenerColorBadge(tarea.prioridad)}`}>
+                            {tarea.prioridad}
+                        </span>
+
+                        {/* 2. Etiqueta de CATEGORÍA */}
                         <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${obtenerEstiloCategoria(tarea.categoria || 'General')}`}>
                             {tarea.categoria || 'General'}
                         </span>
+
+                        {/* 3. Fecha */}
                         {tarea.fechaLimite && <span className={`text-xs font-medium flex items-center gap-1 ${estaVencida ? 'text-red-500 font-bold' : 'text-gray-400 dark:text-gray-500'}`}>{estaVencida ? '⚠️ Vencida:' : '📅'} {new Date(tarea.fechaLimite).toLocaleDateString()}</span>}
                     </div>
                 </div>
